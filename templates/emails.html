@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Email Summaries</title>
+</head>
+<body>
+    <h1>Daily Newsletter</h1>
+    <h2>Highlights</h2>
+    <ul>
+    {% for email in email_data %}
+        <li>{{ email.summary }}</li>
+    {% endfor %}
+    </ul>
+    <h2>Flash News</h2>
+    <ul>
+    {% for email in email_data %}
+        <li>{{ email.subject }}</li>
+    {% endfor %}
+    </ul>
+</body>
+</html>
+
+<!--<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Email Summaries</title>
+</head>
+<body>
+    <h1>Email Summaries</h1>
+    <div>
+        {% for email in email_data %}
+            <div style="border: 1px solid #ccc; margin-bottom: 20px; padding: 10px;">
+                <h3>{{ email.subject }}</h3>
+                <p>From: {{ email.sender }}</p>
+                <p>Date: {{ email.date }}</p>
+                <p>Summary: {{ email.summary }}</p>
+                <details>
+                    <summary>Full email body</summary>
+                    <p>{{ email.body }}</p>
+                </details>
+                <details>
+                    <summary>Key Information</summary>
+                    <ul>
+                        {% for info in email.key_information %}
+                            <li>{{ info[0] }} (Salience: {{ info[1] }})</li>
+                        {% endfor %}
+                    </ul>
+                </details>
+            </div>
+        {% endfor %}
+    </div>
+</body>
+</html>>

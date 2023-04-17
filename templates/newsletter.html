@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Email Summaries</title>
+</head>
+<body>
+    <h1>Daily Newsletter</h1>
+    <h2>Highlights</h2>
+    <ul>
+    {% for email in email_data %}
+        <li>{{ email.summary }}</li>
+    {% endfor %}
+    </ul>
+    <h2>Flash News</h2>
+    <ul>
+    {% for email in email_data %}
+        <li>{{ email.subject }}</li>
+    {% endfor %}
+    </ul>
+</body>
+</html>

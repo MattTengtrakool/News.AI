@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Email Summaries</title>
+</head>
+<body>
+    <h1>Email Summaries</h1>
+    <table>
+        <tr>
+            <th>Subject</th>
+            <th>Sender</th>
+            <th>Date</th>
+            <th>Summary</th>
+            <th>Sentiment</th>
+        </tr>
+        {% for email in email_data %}
+        <tr>
+            <td>{{ email.subject }}</td>
+            <td>{{ email.sender }}</td>
+            <td>{{ email.date }}</td>
+            <td>{{ email.summary }}</td>
+            <td>{{ email.sentiment }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+</body>
+</html>

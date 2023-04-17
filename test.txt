@@ -1,0 +1,197 @@
+from flask import Flask, redirect, url_for, session, request, jsonify, render_template, send_from_directory
+from googleapiclient.discovery import build
+from flask_session import Session
+from googleapiclient.errors import HttpError
+from google.oauth2.credentials import Credentials
+from google_auth_oauthlib.flow import InstalledAppFlow
+from google.cloud import language_v1
+from google.cloud.language_v1 import types
+from google.oauth2 import service_account
+from google.cloud import translate_v2 as translate
+import openai
+import os
+import base64
+import time
+import json
+
+app = Flask(__name__)
+os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
+os.environ['PATH'] += os.pathsep + '/Users/matt/downloads/google-cloud-sdk/bin'
+
+
+# Define the scopes that you need for the Gmail API
+SCOPES = ['https://www.googleapis.com/auth/gmail.readonly', 'https://www.googleapis.com/auth/gmail.compose']
+
+# Create the flow object and specify the scopes
+flow = InstalledAppFlow.from_client_secrets_file(
+    'client_secret.json', scopes=SCOPES, redirect_uri="http://127.0.0.1:5000/callback")
+
+'''def check_redirect_uri(flow):
+    expected_redirect_uri = "http://localhost:5000/callback"
+    actual_redirect_uri = flow.redirect_uri
+
+    if actual_redirect_uri != expected_redirect_uri:
+        return False
+    return True'''
+app.config['SESSION_TYPE'] = 'filesystem'
+app.config['SESSION_PERMANENT'] = False
+Session(app)
+
+# Modify your index() function
+@app.route('/')
+def index():
+    breakpoint()  # Add a breakpoint here
+
+    # Check if the user has authorized the application
+    if 'credentials' not in session:
+        # If the user has not authorized the application, redirect to the OAuth2 consent screen
+        authorization_url, state = flow.authorization_url(
+            access_type='offline',
+            include_granted_scopes='true'
+        )
+        session['state'] = state
+
+        return redirect(authorization_url)
+    else:
+        # If the user has already authorized the application, display the emails
+        print("Authorized user, redirecting to get_emails")
+        return get_emails()
+
+
+
+
+# Get a list of the user's emails
+@app.route('/emails')
+def get_emails():
+    # Check if the user has authorized the application
+    if 'credentials' not in session:
+        return redirect(url_for('index'))
+
+    # Load the user's credentials from the session
+    credentials = Credentials.from_authorized_user_info(session['credentials'])
+    
+    # Create a Gmail API client
+    service = build('gmail', 'v1', credentials=credentials)
+
+    # Get a list of the user's email messages
+    result = service.users().messages().list(userId='me', q='newer_than:1d').execute()
+    messages = result.get('messages', [])
+    
+    # Iterate over the messages and get their contents
+    email_data = []
+    for message in messages:
+        msg = service.users().messages().get(userId='me', id=message['id']).execute()
+        payload = msg['payload']
+        headers = payload['headers']
+
+        # Get the email subject and body text
+        for header in headers:
+            if header['name'] == 'Subject':
+                subject = header['value']
+            if header['name'] == 'From':
+                sender = header['value']
+            if header['name'] == 'Date':
+                date = header['value']
+        if 'parts' in payload:
+            parts = payload['parts']
+            data = ''
+            for part in parts:
+                if part['mimeType'] == 'text/plain':
+                    data = part['body']['data']
+            if data == '':
+                data = payload['body']['data']
+        else:
+            data = payload['body']['data']
+
+        # Decode and process the email body text using the Google Cloud Natural Language API
+        decoded_data = base64.urlsafe_b64decode(data.encode('utf-8')).decode('utf-8')
+
+        # Instantiate the translation client
+        translate_client = translate.Client(credentials=credentials)
+
+        # Check the language of the email content
+        detected_language_response = translate_client.detect_language(decoded_data)
+
+        # Get the language code with the highest confidence score
+        detected_language = detected_language_response['language']
+
+        # Check if the detected language is supported
+        supported_languages = ['en', 'es', 'fr', 'de', 'it', 'nl', 'ru', 'ja', 'ko', 'zh', 'pt']  # Add more supported languages if needed
+        if detected_language not in supported_languages:
+            continue  # Skip this email if the language is not supported
+        
+            # Create the document for sentiment analysis
+        document = language_v1.Document(content=decoded_data, type_=language_v1.Document.Type.PLAIN_TEXT)
+        sentiment = client.analyze_sentiment(request={'document': document}).document_sentiment
+
+        key_file_path = '/Users/matt/downloads/vaulted-bus-383605-bcb39e1c743c.json'
+        natural_language_scopes = ['https://www.googleapis.com/auth/cloud-language']
+        natural_language_credentials = service_account.Credentials.from_service_account_file(key_file_path, scopes=natural_language_scopes)
+        client = language_v1.LanguageServiceClient(credentials=natural_language_credentials)
+
+
+        document = language_v1.Document(content=decoded_data, type_=language_v1.Document.Type.PLAIN_TEXT)
+        sentiment = client.analyze_sentiment(request={'document': document}).document_sentiment
+
+                # Generate a summary of the email using OpenAI's GPT-3 API
+        openai.api_key = os.environ.get('OPENAI_API_KEY')
+        prompt = f"Please summarize the following email: {decoded_data}"
+        response = openai.Completion.create(
+            engine="davinci",
+            prompt=prompt,
+            temperature=0.5,
+            max_tokens=100,
+            n=1,
+            stop=None,
+            timeout=10
+        )
+        summary = response.choices[0].text
+
+        # Add the email data to the list of emails
+        email_data.append({
+            'subject': subject,
+            'sender': sender,
+            'date': date,
+            'summary': summary,
+            'sentiment': sentiment.score
+        })
+
+    with open('email_summaries.json', 'w') as f:
+        json.dump(email_data, f)
+
+    # Redirect the user to the download page
+    return render_template('emails.html', email_data=email_data)
+
+
+@app.route('/download')
+def download():
+    return send_from_directory(os.getcwd(), 'email_summaries.json', as_attachment=True)
+
+@app.route('/callback')
+def callback():
+    print("Inside the /callback function")
+    print("Request URL:", request.url)
+
+
+    breakpoint()  # Add a breakpoint here
+
+    # Check if there's an error in the URL
+    if 'error' in request.args:
+        error_message = request.args.get('error')
+        return f"Error: {error_message}"
+    # Exchange the authorization code for a token
+    flow.fetch_token(authorization_response=request.url)
+    # Save the user's credentials in the session
+    credentials = flow.credentials
+    session['credentials'] = json.loads(credentials.to_json())
+
+    # Redirect the user to the / page
+    print("Redirecting to index route")
+    return redirect(url_for('index'))
+
+
+
+
+if __name__ == '__main__':
+    app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'dev')
+    app.run(debug=True)

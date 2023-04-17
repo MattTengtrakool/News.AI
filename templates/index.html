@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta http-equiv="Cache-Control" content="no-store" />
+    <title>Email Aggregator</title>
+</head>
+<body>
+    <h1>Email Aggregator</h1>
+    <p>Welcome to our email aggregator app! Please sign in to get started.</p>
+    <a href="{{ url_for('login') }}">Sign in with Google</a>
+
+    {% if 'credentials' in session %}
+    <p>You are authorized to access Gmail. Click the button below to view your email summaries.</p>
+    <a href="{{ url_for('get_emails') }}">
+        <button>View Email Summaries</button>
+    </a>
+    {% endif %}
+</body>
+</html>
